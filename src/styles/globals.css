@@ -45,6 +45,13 @@ select {
 }
 
 @layer utilities {
+  .sidebar-logo {
+    width: 88px;
+    height: 64px;
+    object-fit: contain;
+    display: block;
+  }
+
   .table-cell-center {
     display: flex;
     min-height: 48px;
