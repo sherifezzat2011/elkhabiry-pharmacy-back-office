@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-primary: #10B7B4;
+  --brand-primary-dark: #078E8D;
+  --brand-primary-deep: #086F70;
+  --brand-primary-light: #DDF7F6;
+  --brand-primary-soft: #F0FBFA;
+  --brand-charcoal: #32383D;
+  --brand-gray: #727B80;
+  --brand-gray-light: #E6ECEE;
+  --brand-background: #F5F8F8;
+  --brand-surface: #FFFFFF;
+  --success: #16875B;
+  --warning: #C98212;
+  --danger: #C84646;
+  --info: #277BA8;
+  font-family: Inter, Manrope, Cairo, "IBM Plex Sans Arabic", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--brand-charcoal);
+  background: var(--brand-background);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--brand-background);
+  font-variant-numeric: tabular-nums;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: var(--brand-primary-light);
+  color: var(--brand-primary-deep);
+}
+
+@layer utilities {
+  .table-cell-center {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .scrollbar-soft {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(16, 183, 180, 0.32) transparent;
+  }
+
+  .scrollbar-soft::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-soft::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(16, 183, 180, 0.32);
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  aside,
+  nav,
+  .invoice-buttons,
+  .invoice-secondary {
+    display: none !important;
+  }
+
+  main,
+  .invoice-page {
+    margin: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .invoice-header,
+  .invoice-progress,
+  .invoice-totals,
+  table {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .rounded-lg {
+    box-shadow: none !important;
+  }
+}
