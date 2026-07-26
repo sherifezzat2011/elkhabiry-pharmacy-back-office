@@ -55,6 +55,32 @@ jobs:
             delivery/pricing \
             delivery/channels \
             delivery/zones \
+            suppliers \
+            suppliers/purchase-orders \
+            suppliers/goods-receiving \
+            reports/suppliers/supplier-performance \
+            reports/suppliers/purchase-volume \
+            reports/suppliers/delivery-performance \
+            reports/suppliers/supplier-ranking \
+            reports/customers/customer-acquisition \
+            reports/customers/repeat-behavior \
+            reports/customers/inactivity \
+            reports/customers/customer-value \
+            reports/customers/customer-segmentation \
+            reports/customers/vip-customers \
+            reports/customers/purchase-frequency \
+            reports/prescriptions/prescription-trends \
+            reports/prescriptions/dispensing-performance \
+            reports/prescriptions/completion-rate \
+            reports/prescriptions/prescription-status \
+            reports/prescriptions/prescription-fulfillment \
+            reports/prescriptions/doctor-prescription-volume \
+            reports/doctors/doctor-performance \
+            reports/doctors/prescription-volume \
+            reports/doctors/revenue-contribution \
+            reports/doctors/specialty-analysis \
+            reports/doctors/product-preference \
+            reports/doctors/doctor-ranking \
             reports/promotions/offers \
             reports/promotions/promo-codes \
             sales/orders \

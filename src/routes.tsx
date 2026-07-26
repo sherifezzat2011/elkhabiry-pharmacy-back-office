@@ -2,11 +2,13 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { allReportRoutes, legacyReportRedirects } from "@/config/reports.config";
 import { ExecutiveBrief } from "@/pages/ExecutiveBrief";
+import { CustomerAnalyticsPage, DoctorInsightsAnalyticsPage, PrescriptionAnalyticsPage } from "@/pages/FocusedAnalyticsPages";
 import { OrderSourceDetailsPage, OrderSourcesReportPage } from "@/pages/OrderSourcesReport";
 import { OrderSourcesOperationsPage } from "@/pages/OrderSourcesOperationsPage";
 import { ReportPage } from "@/pages/ReportPage";
 import { SalesOverviewPage } from "@/pages/SalesOverviewPage";
 import { SalesCustomerDetailsPage, SalesCustomersPage, SalesOrderDetailsPage, SalesOrdersPage } from "@/pages/sales/SalesModule";
+import { DeliveryPerformanceReportPage, GoodsReceivingPage, PurchaseOrdersPage, PurchaseVolumeReportPage, SupplierListPage, SupplierPerformanceReportPage, SupplierRankingReportPage } from "@/pages/SuppliersOperationsPages";
 
 export const router = createBrowserRouter(
   [
@@ -25,6 +27,16 @@ export const router = createBrowserRouter(
         { path: "/sales/orders/:orderId", element: <SalesOrderDetailsPage /> },
         { path: "/sales/customers", element: <SalesCustomersPage /> },
         { path: "/sales/customers/:customerId", element: <SalesCustomerDetailsPage /> },
+        { path: "/suppliers", element: <SupplierListPage /> },
+        { path: "/suppliers/purchase-orders", element: <PurchaseOrdersPage /> },
+        { path: "/suppliers/goods-receiving", element: <GoodsReceivingPage /> },
+        { path: "/reports/suppliers/supplier-performance", element: <SupplierPerformanceReportPage /> },
+        { path: "/reports/suppliers/purchase-volume", element: <PurchaseVolumeReportPage /> },
+        { path: "/reports/suppliers/delivery-performance", element: <DeliveryPerformanceReportPage /> },
+        { path: "/reports/suppliers/supplier-ranking", element: <SupplierRankingReportPage /> },
+        { path: "/reports/customers/:reportId", element: <CustomerAnalyticsPage /> },
+        { path: "/reports/prescriptions/:reportId", element: <PrescriptionAnalyticsPage /> },
+        { path: "/reports/doctors/:reportId", element: <DoctorInsightsAnalyticsPage /> },
         { path: "/brief", element: <Navigate to="/reports/executive-brief" replace /> },
         { path: "/reports/executive-brief", element: <ExecutiveBrief /> },
         ...allReportRoutes.map((route) => ({

@@ -11,7 +11,9 @@ import {
   MapPinned,
   PackageSearch,
   Repeat2,
+  PackageCheck,
   ShoppingBag,
+  ShoppingCart,
   Stethoscope,
   TrendingUp,
   TriangleAlert,
@@ -91,9 +93,8 @@ const moduleConfigs: ModuleConfig[] = [
       { label: "Customer Acquisition", icon: UserPlus },
       { label: "Repeat Behavior", icon: Repeat2 },
       { label: "Inactivity", icon: TriangleAlert },
-      { label: "Value Bands", icon: BadgeDollarSign },
+      { label: "Customer Value", icon: BadgeDollarSign },
       { label: "Customer Segmentation", icon: UsersRound },
-      { label: "Retention Analysis", icon: LineChart },
       { label: "VIP Customers", icon: Trophy },
       { label: "Purchase Frequency", icon: CalendarDays },
     ],
@@ -101,35 +102,11 @@ const moduleConfigs: ModuleConfig[] = [
       "Customer Acquisition",
       "Repeat Behavior",
       "Inactivity",
-      "Value Bands",
-      "Cohorts",
-      "Geography",
-      "Store Affinity",
-      "Customer Lifetime Value",
+      "Customer Value",
       "Customer Segmentation",
-      "Retention Analysis",
-      "Churn Analysis",
-      "Loyalty Performance",
       "VIP Customers",
-      "Chronic Patients",
       "Purchase Frequency",
     ],
-  },
-  {
-    id: "suppliers",
-    label: "Suppliers",
-    routeSegment: "suppliers",
-    icon: Truck,
-    visibleReports: [
-      { label: "Supplier Performance", icon: ChartNoAxesColumnIncreasing },
-      { label: "Purchase Volume", icon: Boxes },
-      { label: "Fill Rate Analysis", icon: BadgeDollarSign },
-      { label: "Delivery Performance", icon: Truck },
-      { label: "Lead Time Analysis", icon: CalendarClock },
-      { label: "Supplier Ranking", icon: Trophy },
-      { label: "Supplier Risk Analysis", icon: TriangleAlert },
-    ],
-    allReports: ["Supplier Performance", "Purchase Volume", "Fill Rate Analysis", "Delivery Performance", "Lead Time Analysis", "Supplier Ranking", "Supplier Risk Analysis", "Supplier Dependence", "Supplier Cost Analysis", "Purchase Trends"],
   },
   {
     id: "prescriptions",
@@ -148,13 +125,9 @@ const moduleConfigs: ModuleConfig[] = [
       "Prescription Trends",
       "Dispensing Performance",
       "Completion Rate",
-      "Generic Substitution",
-      "Prescription Value",
-      "Prescription Categories",
       "Prescription Status",
       "Prescription Fulfillment",
       "Doctor Prescription Volume",
-      "Branch Prescription Analysis",
     ],
   },
   {
@@ -170,7 +143,7 @@ const moduleConfigs: ModuleConfig[] = [
       { label: "Product Preference", icon: PackageSearch },
       { label: "Doctor Ranking", icon: Trophy },
     ],
-    allReports: ["Doctor Performance", "Prescription Volume", "Revenue Contribution", "Specialty Analysis", "Product Preference", "Branch Coverage", "Fulfillment Performance", "Engagement Analysis", "Doctor Growth", "Doctor Ranking"],
+    allReports: ["Doctor Performance", "Prescription Volume", "Revenue Contribution", "Specialty Analysis", "Product Preference", "Doctor Ranking"],
   },
 ];
 
@@ -211,10 +184,35 @@ const demoModuleConfigs: ModuleConfig[] = [
     ],
     allReports: ["Local Delivery", "Delivery Pricing", "Delivery Channels", "Delivery Zones"],
   },
+  {
+    id: "suppliers",
+    label: "Suppliers",
+    routeSegment: "suppliers",
+    icon: Truck,
+    visibleReports: [
+      { label: "Supplier List", icon: Truck },
+      { label: "Purchase Orders", icon: ShoppingCart },
+      { label: "Goods Receiving", icon: PackageCheck },
+      { label: "Supplier Performance", icon: ChartNoAxesColumnIncreasing },
+      { label: "Purchase Volume", icon: Boxes },
+      { label: "Delivery Performance", icon: Truck },
+      { label: "Supplier Ranking", icon: Trophy },
+    ],
+    allReports: ["Supplier List", "Purchase Orders", "Goods Receiving", "Supplier Performance", "Purchase Volume", "Delivery Performance", "Supplier Ranking"],
+  },
 ];
 
 function reportPath(module: ModuleConfig, report: string) {
   if (module.id === "catalog") return `/${module.routeSegment}/${slugify(report)}`;
+  if (module.id === "suppliers") {
+    const supplierSegments: Record<string, string> = {
+      "Supplier List": "",
+      "Purchase Orders": "purchase-orders",
+      "Goods Receiving": "goods-receiving",
+    };
+    if (report in supplierSegments) return `/suppliers${supplierSegments[report] ? `/${supplierSegments[report]}` : ""}`;
+    return `/reports/suppliers/${slugify(report)}`;
+  }
   if (module.id === "delivery") {
     const deliverySegments: Record<string, string> = {
       "Local Delivery": "local-delivery",
@@ -334,6 +332,32 @@ legacyReportRedirects.push({
 });
 
 [
+  ["value-bands", "/reports/customers/customer-value"],
+  ["cohorts", "/reports/customers/customer-segmentation"],
+  ["geography", "/reports/customers/customer-acquisition"],
+  ["store-affinity", "/reports/customers/customer-acquisition"],
+  ["customer-lifetime-value", "/reports/customers/customer-value"],
+  ["retention-analysis", "/reports/customers/repeat-behavior"],
+  ["churn-analysis", "/reports/customers/inactivity"],
+  ["loyalty-performance", "/reports/customers/vip-customers"],
+  ["chronic-patients", "/reports/customers/customer-segmentation"],
+].forEach(([segment, to]) => legacyReportRedirects.push({ from: `/reports/customers/${segment}`, to }));
+
+[
+  ["generic-substitution", "/reports/prescriptions/prescription-fulfillment"],
+  ["prescription-value", "/reports/prescriptions/prescription-trends"],
+  ["prescription-categories", "/reports/prescriptions/prescription-trends"],
+  ["branch-prescription-analysis", "/reports/prescriptions/prescription-trends"],
+].forEach(([segment, to]) => legacyReportRedirects.push({ from: `/reports/prescriptions/${segment}`, to }));
+
+[
+  ["branch-coverage", "/reports/doctors/doctor-performance"],
+  ["fulfillment-performance", "/reports/doctors/doctor-performance"],
+  ["engagement-analysis", "/reports/doctors/doctor-ranking"],
+  ["doctor-growth", "/reports/doctors/prescription-volume"],
+].forEach(([segment, to]) => legacyReportRedirects.push({ from: `/reports/doctors/${segment}`, to }));
+
+[
   "product-performance",
   "product-ranking",
   "product-growth",
@@ -376,8 +400,24 @@ legacyReportRedirects.push({
   legacyReportRedirects.push({ from: `/shipping/${segment}`, to });
 });
 
+[
+  ["fill-rate-analysis", "/reports/suppliers/supplier-performance"],
+  ["lead-time-analysis", "/reports/suppliers/delivery-performance"],
+  ["supplier-risk-analysis", "/reports/suppliers/supplier-performance"],
+  ["supplier-dependence", "/reports/suppliers/supplier-performance"],
+  ["supplier-cost-analysis", "/reports/suppliers/purchase-volume"],
+  ["purchase-trends", "/reports/suppliers/purchase-volume"],
+].forEach(([segment, to]) => {
+  legacyReportRedirects.push({ from: `/reports/suppliers/${segment}`, to });
+  legacyReportRedirects.push({ from: `/suppliers/${segment}`, to });
+});
+
 export function findActiveModule(pathname: string) {
-  return [...moduleConfigs, ...demoModuleConfigs].find((module) => pathname.startsWith(module.id === "catalog" || module.id === "delivery" ? `/${module.routeSegment}/` : `/reports/${module.routeSegment}/`))?.id;
+  return [...moduleConfigs, ...demoModuleConfigs].find((module) => {
+    if (module.id === "catalog" || module.id === "delivery") return pathname.startsWith(`/${module.routeSegment}/`);
+    if (module.id === "suppliers") return pathname === "/suppliers" || pathname.startsWith("/suppliers/") || pathname.startsWith("/reports/suppliers/");
+    return pathname.startsWith(`/reports/${module.routeSegment}/`);
+  })?.id;
 }
 
 export function isNavigationItemActive(pathname: string, item: NavigationItem): boolean {
