@@ -36,8 +36,33 @@ jobs:
         env:
           GITHUB_PAGES: "true"
 
-      - name: Add SPA fallback
-        run: cp dist/index.html dist/404.html
+      - name: Add GitHub Pages route fallbacks
+        run: |
+          cp dist/index.html dist/404.html
+          for route in \
+            reports/sales-overview \
+            reports/order-sources \
+            reports/executive-brief \
+            reports/sales/product-performance \
+            reports/sales/sales-concentration \
+            reports/sales/orders-by-area \
+            reports/sales/orders-analysis \
+            catalog/categories \
+            catalog/products \
+            catalog/brands \
+            order-sources \
+            delivery/local-delivery \
+            delivery/pricing \
+            delivery/channels \
+            delivery/zones \
+            reports/promotions/offers \
+            reports/promotions/promo-codes \
+            sales/orders \
+            sales/customers
+          do
+            mkdir -p "dist/$route"
+            cp dist/index.html "dist/$route/index.html"
+          done
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
