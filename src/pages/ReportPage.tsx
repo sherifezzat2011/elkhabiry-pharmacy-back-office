@@ -4,6 +4,8 @@ import { format, startOfWeek, subDays } from "date-fns";
 import { useSearchParams } from "react-router-dom";
 import { BarPanel, CategorySharePanel, DonutPanel, HorizontalBarPanel, InventoryMovementTrendPanel, MainChart, MovementPanel, ParetoPanel } from "@/components/Charts";
 import { DataTable } from "@/components/DataTable";
+import { CatalogCategoriesOperationsPage, CatalogProductsOperationsPage } from "@/pages/CatalogOperationsPages";
+import { DeliveryChannelsPage, DeliveryPricingPage, DeliveryZonesPage, LocalDeliveryOperationsPage } from "@/pages/DeliveryOperationsPages";
 import { EmptyState } from "@/components/EmptyState";
 import { EntityDrawerLauncher } from "@/components/EntityDrawer";
 import { GlobalFilters } from "@/components/GlobalFilters";
@@ -264,12 +266,83 @@ const promoCodes = [
   { code: "VITAMIN10", discount: "10%", used: "51", revenue: "4,900 EGP", status: "Active" },
 ];
 
-const deliveryAreas = [
-  { area: "Tanta Center", orders: 124, fee: "25 EGP", revenue: "3,100 EGP" },
-  { area: "El Geish", orders: 88, fee: "30 EGP", revenue: "2,640 EGP" },
-  { area: "El Bahr", orders: 76, fee: "20 EGP", revenue: "1,520 EGP" },
-  { area: "Stadium District", orders: 61, fee: "25 EGP", revenue: "1,525 EGP" },
+type DeliveryStatus = "Active" | "Inactive";
+type DeliveryChannelType = "In-House" | "External Partner" | "Express";
+type CoverageType = "Radius" | "District" | "Postal Area" | "Custom Boundary";
+
+type DeliveryChannel = {
+  id: string;
+  name: string;
+  type: DeliveryChannelType;
+  contactPerson: string;
+  contactPhone: string;
+  availableDrivers: number;
+  assignedZones: string[];
+  ordersToday: number;
+  averageTime: number;
+  successRate: number;
+  status: DeliveryStatus;
+  activeDeliveries: number;
+  createdDate: string;
+  lastUpdated: string;
+  latestDeliveries: string[];
+};
+
+type DeliveryZone = {
+  id: string;
+  name: string;
+  coverageType: CoverageType;
+  branch: string;
+  deliveryFee: number;
+  minimumOrder: number;
+  estimatedTime: number;
+  assignedChannels: string[];
+  status: DeliveryStatus;
+  ordersToday: number;
+  customersCovered: number;
+  activeOrders: number;
+  createdDate: string;
+  lastUpdated: string;
+  coverageDetails: string;
+};
+
+type DeliveryOrder = {
+  id: string;
+  patient: string;
+  address: string;
+  zoneId: string | null;
+  channelId: string | null;
+  appliedFee: number | null;
+  estimatedTime: string;
+  pricingRule: string;
+  status: string;
+};
+
+const initialDeliveryChannels: DeliveryChannel[] = [
+  { id: "channel-in-house", name: "El Khabiry In-House Drivers", type: "In-House", contactPerson: "Mahmoud Adel", contactPhone: "+20 100 245 7712", availableDrivers: 12, assignedZones: ["zone-tanta-center", "zone-el-geish"], ordersToday: 203, averageTime: 24, successRate: 98, status: "Active", activeDeliveries: 18, createdDate: "2026-02-04", lastUpdated: "2026-07-24", latestDeliveries: ["EKD-2401 to Ahmed Hanafy", "EKD-2398 to Fatma Nabil", "EKD-2394 to Tanta Medical Center"] },
+  { id: "channel-partner", name: "Tanta Delivery Partner", type: "External Partner", contactPerson: "Hossam Farid", contactPhone: "+20 111 680 3345", availableDrivers: 8, assignedZones: ["zone-el-geish", "zone-el-bahr"], ordersToday: 74, averageTime: 31, successRate: 95, status: "Active", activeDeliveries: 6, createdDate: "2026-03-12", lastUpdated: "2026-07-22", latestDeliveries: ["EKD-2400 to Rasha Samir", "EKD-2392 to El Bahr Clinic", "EKD-2385 to Nadia Fouad"] },
+  { id: "channel-express", name: "Express Delivery", type: "Express", contactPerson: "Salma Youssef", contactPhone: "+20 120 774 6110", availableDrivers: 5, assignedZones: ["zone-stadium"], ordersToday: 35, averageTime: 18, successRate: 99, status: "Active", activeDeliveries: 3, createdDate: "2026-04-08", lastUpdated: "2026-07-25", latestDeliveries: ["EKD-2403 to Dr. Karim Lab", "EKD-2396 to Stadium District", "EKD-2388 to Mohamed Atef"] },
 ];
+
+const initialDeliveryZones: DeliveryZone[] = [
+  { id: "zone-tanta-center", name: "Tanta Center", coverageType: "Radius", branch: "El Khabiry Main Branch", deliveryFee: 20, minimumOrder: 150, estimatedTime: 18, assignedChannels: ["channel-in-house"], status: "Active", ordersToday: 124, customersCovered: 16000, activeOrders: 11, createdDate: "2026-01-15", lastUpdated: "2026-07-24", coverageDetails: "Center: El Khabiry Main Branch, radius 3 KM" },
+  { id: "zone-el-geish", name: "El Geish", coverageType: "Radius", branch: "El Geish Branch", deliveryFee: 25, minimumOrder: 180, estimatedTime: 22, assignedChannels: ["channel-in-house", "channel-partner"], status: "Active", ordersToday: 88, customersCovered: 11000, activeOrders: 8, createdDate: "2026-01-20", lastUpdated: "2026-07-23", coverageDetails: "Center: El Geish Street, radius 4 KM" },
+  { id: "zone-el-bahr", name: "El Bahr", coverageType: "District", branch: "El Khabiry Main Branch", deliveryFee: 25, minimumOrder: 180, estimatedTime: 24, assignedChannels: ["channel-partner"], status: "Active", ordersToday: 66, customersCovered: 9000, activeOrders: 5, createdDate: "2026-02-02", lastUpdated: "2026-07-21", coverageDetails: "District: El Bahr Street and surrounding pharmacies" },
+  { id: "zone-stadium", name: "Stadium District", coverageType: "Postal Area", branch: "Stadium Service Point", deliveryFee: 30, minimumOrder: 220, estimatedTime: 29, assignedChannels: ["channel-express"], status: "Active", ordersToday: 34, customersCovered: 6000, activeOrders: 0, createdDate: "2026-02-18", lastUpdated: "2026-07-20", coverageDetails: "Postal area: Tanta Stadium delivery route" },
+];
+
+const initialDeliveryOrders: DeliveryOrder[] = [
+  { id: "EKD-2403", patient: "Dr. Karim Lab", address: "Stadium District, beside Tanta Stadium", zoneId: "zone-stadium", channelId: "channel-express", appliedFee: 30, estimatedTime: "29 min", pricingRule: "Zone-specific delivery fee", status: "Out for Delivery" },
+  { id: "EKD-2401", patient: "Ahmed Hanafy", address: "Tanta Center, El Nadi Street", zoneId: "zone-tanta-center", channelId: "channel-in-house", appliedFee: 20, estimatedTime: "18 min", pricingRule: "Zone-specific delivery fee", status: "Preparing" },
+  { id: "EKD-2400", patient: "Rasha Samir", address: "El Geish Street, near pharmacy branch", zoneId: "zone-el-geish", channelId: "channel-partner", appliedFee: 25, estimatedTime: "22 min", pricingRule: "Zone-specific delivery fee", status: "Assigned" },
+];
+
+const deliveryAreas = initialDeliveryZones.map((zone) => ({
+  area: zone.name,
+  orders: zone.ordersToday,
+  fee: `${zone.deliveryFee} EGP`,
+  revenue: `${formatNumber(zone.ordersToday * zone.deliveryFee)} EGP`,
+}));
 
 const dailyDeliveries = [
   { day: "Mon", value: 182 },
@@ -756,6 +829,7 @@ function MiniBarChart({ data }: { data: { day: string; value: number }[] }) {
 }
 
 function LocalDeliveryDemoPage() {
+  return <LocalDeliveryOperationsPage initialZones={initialDeliveryZones} initialChannels={initialDeliveryChannels} initialOrders={initialDeliveryOrders} dailyDeliveries={dailyDeliveries} />;
   const rows = deliveryAreas.map((row) => [row.area, String(row.orders), row.fee, row.revenue]);
   return (
     <div className="mx-auto max-w-[1680px] space-y-5">
@@ -791,6 +865,7 @@ function LocalDeliveryDemoPage() {
 }
 
 function PricingDemoPage() {
+  return <DeliveryPricingPage initialZones={initialDeliveryZones} />;
   const rules = [
     ["0-3 KM", "20 EGP"],
     ["3-5 KM", "30 EGP"],
@@ -824,6 +899,7 @@ function PricingDemoPage() {
 }
 
 function MethodsDemoPage() {
+  return <DeliveryChannelsPage initialChannels={initialDeliveryChannels} initialZones={initialDeliveryZones} />;
   const channels = [
     { label: "In-House Drivers", value: 65, icon: Truck },
     { label: "Motorbike Fleet", value: 25, icon: Bike },
@@ -850,6 +926,7 @@ function MethodsDemoPage() {
 }
 
 function CoverageDemoPage() {
+  return <DeliveryZonesPage initialZones={initialDeliveryZones} initialChannels={initialDeliveryChannels} />;
   return (
     <div className="mx-auto max-w-[1680px] space-y-5">
       <ExecutiveHero eyebrow="Delivery Operations" title="Delivery Coverage" subtitle="Simplified coverage overview for pharmacy delivery service areas and customer reach." />
@@ -965,6 +1042,7 @@ function CategoryDetailsDrawer({ category, categories, onClose }: { category: Ca
 }
 
 function CategoriesDemoPage() {
+  return <CatalogCategoriesOperationsPage />;
   const [categories, setCategories] = useState<CatalogCategory[]>(initialCatalogCategories);
   const [editing, setEditing] = useState<CatalogCategory | undefined>();
   const [viewing, setViewing] = useState<CatalogCategory | undefined>();
@@ -1100,7 +1178,7 @@ function CategoriesDemoPage() {
         </div>
       </Card>
       {formOpen ? <CategoryForm category={editing} parents={parents} parentId={formParentId} onCancel={() => { setFormOpen(false); setEditing(undefined); setFormParentId(undefined); }} onSave={saveCategory} /> : null}
-      {viewing ? <CategoryDetailsDrawer category={viewing} categories={categories} onClose={() => setViewing(undefined)} /> : null}
+      {viewing ? <CategoryDetailsDrawer category={viewing!} categories={categories} onClose={() => setViewing(undefined)} /> : null}
       {blockedDeleteMessage ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4 backdrop-blur-sm">
           <Card className="w-full max-w-md p-5">
@@ -1119,7 +1197,7 @@ function CategoriesDemoPage() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/35 p-4 backdrop-blur-sm">
           <Card className="w-full max-w-md p-5">
             <h2 className="font-bold text-slate-950">Delete Category</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Delete {confirmDelete.name}? This action removes the category from the local demo catalog.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Delete {confirmDelete!.name}? This action removes the category from the local demo catalog.</p>
             <div className="mt-5 flex justify-end gap-2"><Button onClick={() => setConfirmDelete(undefined)}>Cancel</Button><Button variant="danger" onClick={deleteCategory}>Delete</Button></div>
           </Card>
         </div>
@@ -1129,6 +1207,7 @@ function CategoriesDemoPage() {
 }
 
 function CatalogProductsDemoPage() {
+  return <CatalogProductsOperationsPage />;
   const [products, setProducts] = useState<CatalogProduct[]>(initialCatalogProducts);
   const [editing, setEditing] = useState<CatalogProduct | undefined>();
   const [viewing, setViewing] = useState<CatalogProduct | undefined>();
@@ -1159,7 +1238,7 @@ function CatalogProductsDemoPage() {
         <DemoKpi label="Near Expiry Products" value="37" detail="Require margin or transfer action" />
       </section>
       <Card className="overflow-hidden"><div className="overflow-x-auto scrollbar-soft"><table className="w-full min-w-[920px] text-sm"><thead className="bg-brand-50 text-brand-900"><tr>{["Product", "Category", "Brand", "Stock", "Price", "Status", "Actions"].map((header) => <th key={header} className={cn("h-12 px-4 text-center align-middle text-xs font-bold uppercase tracking-wide", header === "Product" && "text-left")}>{header}</th>)}</tr></thead><tbody className="divide-y divide-slate-100 bg-white">{products.map((product) => <tr key={product.id} className="hover:bg-brand-50/40"><td className="px-4 py-4 text-left font-bold text-slate-900">{product.product}</td><td className="px-4 py-4 text-center">{product.category}</td><td className="px-4 py-4 text-center">{product.brand}</td><td className="px-4 py-4 text-center">{formatNumber(product.stock)}</td><td className="px-4 py-4 text-center">{formatOfferCurrency(product.price)}</td><td className="px-4 py-4 text-center"><CatalogStatusBadge value={product.status} /></td><td className="px-4 py-4"><div className="flex justify-center gap-1.5"><Button size="icon" variant="ghost" aria-label="View Product" title="View Product" onClick={() => setViewing(product)}><Eye className="h-4 w-4" /></Button><Button size="icon" variant="ghost" aria-label="Edit Product" title="Edit Product" onClick={() => openForm(product)}><Pencil className="h-4 w-4" /></Button><Button size="sm" variant="ghost" onClick={() => toggleProductStatus(product)}>{product.status === "Active" ? "Deactivate" : "Activate"}</Button></div></td></tr>)}</tbody></table></div></Card>
-      {viewing ? <div className="fixed inset-0 z-50"><button className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm" aria-label="Close product details" onClick={() => setViewing(undefined)} /><aside className="absolute right-0 top-0 h-full w-full bg-white p-5 shadow-2xl sm:max-w-md"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase text-brand-700">Product Details</p><h2 className="mt-1 text-lg font-bold text-slate-950">{viewing.product}</h2></div><Button variant="ghost" size="icon" onClick={() => setViewing(undefined)}><X className="h-5 w-5" /></Button></div><dl className="mt-5 grid gap-3 text-sm">{[["Category", viewing.category], ["Brand", viewing.brand], ["Stock", formatNumber(viewing.stock)], ["Price", formatOfferCurrency(viewing.price)], ["Status", viewing.status]].map(([label, value]) => <div key={label} className="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt className="text-slate-500">{label}</dt><dd className="font-semibold text-slate-900">{value}</dd></div>)}</dl></aside></div> : null}
+      {viewing ? <div className="fixed inset-0 z-50"><button className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm" aria-label="Close product details" onClick={() => setViewing(undefined)} /><aside className="absolute right-0 top-0 h-full w-full bg-white p-5 shadow-2xl sm:max-w-md"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase text-brand-700">Product Details</p><h2 className="mt-1 text-lg font-bold text-slate-950">{viewing!.product}</h2></div><Button variant="ghost" size="icon" onClick={() => setViewing(undefined)}><X className="h-5 w-5" /></Button></div><dl className="mt-5 grid gap-3 text-sm">{[["Category", viewing!.category], ["Brand", viewing!.brand], ["Stock", formatNumber(viewing!.stock)], ["Price", formatOfferCurrency(viewing!.price)], ["Status", viewing!.status]].map(([label, value]) => <div key={label} className="flex justify-between gap-4 border-b border-slate-100 pb-2"><dt className="text-slate-500">{label}</dt><dd className="font-semibold text-slate-900">{value}</dd></div>)}</dl></aside></div> : null}
       {formOpen ? <div className="fixed inset-0 z-50"><button className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm" aria-label="Close product form" onClick={() => setFormOpen(false)} /><aside className="absolute right-0 top-0 flex h-full w-full flex-col bg-white shadow-2xl sm:max-w-md"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><h2 className="text-lg font-bold text-slate-950">{editing ? "Edit Product" : "Add Product"}</h2><Button variant="ghost" size="icon" onClick={() => setFormOpen(false)}><X className="h-5 w-5" /></Button></div><div className="flex-1 space-y-4 overflow-y-auto p-5"><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Product<input className="h-10 rounded-lg border border-slate-200 px-3" value={form.product} onChange={(event) => setForm({ ...form, product: event.target.value })} /></label><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Assign Category<select className="h-10 rounded-lg border border-slate-200 px-3" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{["Pain Relief", "Antibiotics", "Multivitamins", "Medical Devices", "Dermocosmetics"].map((item) => <option key={item}>{item}</option>)}</select></label><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Assign Brand<select className="h-10 rounded-lg border border-slate-200 px-3" value={form.brand} onChange={(event) => setForm({ ...form, brand: event.target.value })}>{["GSK", "Haleon", "Roche", "L'Oreal", "Eva Pharma", "Hikma"].map((item) => <option key={item}>{item}</option>)}</select></label><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Stock<input className="h-10 rounded-lg border border-slate-200 px-3" type="number" value={form.stock} onChange={(event) => setForm({ ...form, stock: Number(event.target.value) })} /></label><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Price<input className="h-10 rounded-lg border border-slate-200 px-3" type="number" value={form.price} onChange={(event) => setForm({ ...form, price: Number(event.target.value) })} /></label><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Status<select className="h-10 rounded-lg border border-slate-200 px-3" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as CatalogStatus })}><option>Active</option><option>Inactive</option></select></label></div><div className="flex justify-end gap-2 border-t border-slate-100 p-4"><Button onClick={() => setFormOpen(false)}>Cancel</Button><Button variant="primary" onClick={saveProduct}>Save Product</Button></div></aside></div> : null}
     </div>
   );
@@ -1206,9 +1285,9 @@ function PharmacyDemoPage({ section, title }: { section: string; title: string }
   if (section === "Promotions" && title === "Offers") return <OffersDemoPage />;
   if (section === "Promotions" && title === "Promo Codes") return <PromoCodesDemoPage />;
   if (section === "Delivery Operations" && title === "Local Delivery") return <LocalDeliveryDemoPage />;
-  if (section === "Delivery Operations" && title === "Pricing") return <PricingDemoPage />;
-  if (section === "Delivery Operations" && title === "Methods") return <MethodsDemoPage />;
-  if (section === "Delivery Operations" && title === "Geo Fencing") return <CoverageDemoPage />;
+  if (section === "Delivery Operations" && (title === "Pricing" || title === "Delivery Pricing")) return <PricingDemoPage />;
+  if (section === "Delivery Operations" && (title === "Methods" || title === "Delivery Channels")) return <MethodsDemoPage />;
+  if (section === "Delivery Operations" && (title === "Geo Fencing" || title === "Delivery Zones")) return <CoverageDemoPage />;
   return null;
 }
 

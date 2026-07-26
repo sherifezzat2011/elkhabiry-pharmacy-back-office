@@ -11,6 +11,7 @@ import {
   MapPinned,
   PackageSearch,
   Repeat2,
+  ShoppingBag,
   Stethoscope,
   TrendingUp,
   TriangleAlert,
@@ -198,22 +199,31 @@ const demoModuleConfigs: ModuleConfig[] = [
     allReports: ["Offers", "Promo Codes"],
   },
   {
-    id: "shipping",
+    id: "delivery",
     label: "Delivery Operations",
-    routeSegment: "shipping",
+    routeSegment: "delivery",
     icon: Truck,
     visibleReports: [
       { label: "Local Delivery", icon: Truck },
-      { label: "Pricing", icon: BadgeDollarSign },
-      { label: "Methods", icon: ChartPie },
-      { label: "Geo Fencing", icon: MapPinned },
+      { label: "Delivery Pricing", icon: BadgeDollarSign },
+      { label: "Delivery Channels", icon: ChartPie },
+      { label: "Delivery Zones", icon: MapPinned },
     ],
-    allReports: ["Local Delivery", "Pricing", "Methods", "Geo Fencing"],
+    allReports: ["Local Delivery", "Delivery Pricing", "Delivery Channels", "Delivery Zones"],
   },
 ];
 
 function reportPath(module: ModuleConfig, report: string) {
   if (module.id === "catalog") return `/${module.routeSegment}/${slugify(report)}`;
+  if (module.id === "delivery") {
+    const deliverySegments: Record<string, string> = {
+      "Local Delivery": "local-delivery",
+      "Delivery Pricing": "pricing",
+      "Delivery Channels": "channels",
+      "Delivery Zones": "zones",
+    };
+    return `/${module.routeSegment}/${deliverySegments[report] ?? slugify(report)}`;
+  }
   return `/reports/${module.routeSegment}/${slugify(report)}`;
 }
 
@@ -257,6 +267,12 @@ export const sidebarNavigation: NavigationItem[] = [
       },
       ...reportNavigation,
     ],
+  },
+  {
+    id: "order-sources",
+    label: "Order Sources",
+    icon: ShoppingBag,
+    path: "/order-sources",
   },
   ...demoModuleConfigs.map(moduleNavigation),
 ];
@@ -347,8 +363,21 @@ legacyReportRedirects.push({
   });
 });
 
+[
+  ["local-delivery", "/delivery/local-delivery"],
+  ["pricing", "/delivery/pricing"],
+  ["delivery-pricing", "/delivery/pricing"],
+  ["methods", "/delivery/channels"],
+  ["delivery-channels", "/delivery/channels"],
+  ["geo-fencing", "/delivery/zones"],
+  ["delivery-zones", "/delivery/zones"],
+].forEach(([segment, to]) => {
+  legacyReportRedirects.push({ from: `/reports/shipping/${segment}`, to });
+  legacyReportRedirects.push({ from: `/shipping/${segment}`, to });
+});
+
 export function findActiveModule(pathname: string) {
-  return [...moduleConfigs, ...demoModuleConfigs].find((module) => pathname.startsWith(module.id === "catalog" ? `/${module.routeSegment}/` : `/reports/${module.routeSegment}/`))?.id;
+  return [...moduleConfigs, ...demoModuleConfigs].find((module) => pathname.startsWith(module.id === "catalog" || module.id === "delivery" ? `/${module.routeSegment}/` : `/reports/${module.routeSegment}/`))?.id;
 }
 
 export function isNavigationItemActive(pathname: string, item: NavigationItem): boolean {

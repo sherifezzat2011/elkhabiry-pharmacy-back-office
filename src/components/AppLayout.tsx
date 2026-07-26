@@ -9,6 +9,7 @@ function pageTitleForPath(pathname: string) {
   if (pathname === "/sales/orders") return "Patient Orders";
   if (pathname.startsWith("/sales/customers/")) return "Customer Details";
   if (pathname === "/sales/customers") return "Customer Care";
+  if (pathname === "/order-sources") return "Order Sources";
   if (pathname === "/reports/order-sources") return "Order Sources";
   if (pathname.startsWith("/reports/order-sources/")) return "Source Details";
   if (pathname === "/reports/executive-brief") return "Operations Command Center";

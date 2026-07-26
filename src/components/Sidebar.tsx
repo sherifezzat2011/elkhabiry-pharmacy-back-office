@@ -193,6 +193,27 @@ export function Sidebar() {
             <div className="mt-3 space-y-2">
               {standaloneSections.map((section) => {
                 const Icon = section.icon;
+                if (section.path && !section.children?.length) {
+                  const directActive = location.pathname === section.path;
+                  return (
+                    <NavLink
+                      key={section.id}
+                      to={section.path}
+                      title={section.label}
+                      onClick={closeMobileDrawer}
+                      className={() =>
+                        cn(
+                          "relative flex h-14 w-full min-w-0 items-center gap-3 rounded-lg px-3 text-left text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+                          directActive ? "bg-brand-50 text-brand-800" : "text-slate-600 hover:bg-brand-50/70 hover:text-brand-800",
+                        )
+                      }
+                    >
+                      {directActive ? <span className="absolute left-0 top-3 h-8 w-1 rounded-full bg-brand-500" /> : null}
+                      <Icon className="h-5 w-5 shrink-0 text-current opacity-95" />
+                      <span className="flex-1 truncate">{section.label}</span>
+                    </NavLink>
+                  );
+                }
                 const isOpen = expanded.modules[section.id] ?? isNavigationItemActive(location.pathname, section);
                 const active = isNavigationItemActive(location.pathname, section);
                 return (

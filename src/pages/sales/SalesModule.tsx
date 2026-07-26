@@ -4,6 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { addDays, endOfMonth, endOfWeek, format, isAfter, isBefore, parseISO, startOfMonth, startOfWeek, subMonths, subWeeks } from "date-fns";
 import { ArrowLeft, Download, Edit, Eye, MoreHorizontal, Plus, Printer, Search, UserPlus, XCircle } from "lucide-react";
 import { branchNameForOrder, mockSalesCustomers, mockSalesOrders, orderSourceConfig, orderTotal, paymentMethods, deliveryMethods, salesProducts, salesRepresentatives, salesWarehouses, type CustomerStatus, type OrderSource, type SalesCustomer, type SalesOrder, type SalesOrderStatus } from "@/data/sales";
+import { operationalOrderSources, orderSourceBranches, sourceAvailableForBranch } from "@/data/orderSources";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
@@ -183,15 +184,41 @@ function SalesHeader({ title, subtitle, children }: { title: string; subtitle: s
 
 function CreateOrderModal({ onClose, onCreate, customerId }: { onClose: () => void; onCreate: (order: SalesOrder) => void; customerId?: string }) {
   const [selectedCustomer, setSelectedCustomer] = useState(customerId ?? mockSalesCustomers[0].id);
-  const [orderSource, setOrderSource] = useState<OrderSource>("walk_in");
+  const [selectedBranch, setSelectedBranch] = useState("Tanta Branch");
+  const branchSources = operationalOrderSources.filter((source) => sourceAvailableForBranch(source, selectedBranch));
+  const [orderSource, setOrderSource] = useState<OrderSource>(branchSources[0]?.sourceId ?? "walk_in");
+  const selectedSource = branchSources.find((source) => source.sourceId === orderSource) ?? branchSources[0] ?? operationalOrderSources[0];
+  const [paymentMethod, setPaymentMethod] = useState<string>(selectedSource.defaultPaymentMethod === "Not Specified" ? "Cash" : selectedSource.defaultPaymentMethod);
+  const [orderStatus, setOrderStatus] = useState(selectedSource.defaultOrderStatus);
+  const [requiresDelivery, setRequiresDelivery] = useState(selectedSource.requiresDelivery);
   const [rows, setRows] = useState([{ product: salesProducts[0].name, quantity: 1, discount: 0 }]);
   const [error, setError] = useState("");
   const customer = mockSalesCustomers.find((item) => item.id === selectedCustomer) ?? mockSalesCustomers[0];
   const subtotal = rows.reduce((sum, row) => sum + row.quantity * (salesProducts.find((item) => item.name === row.product)?.price ?? 0), 0);
   const discount = rows.reduce((sum, row) => sum + row.discount, 0);
   const tax = Math.round(subtotal * 0.14);
-  const deliveryFee = 100;
+  const deliveryFee = requiresDelivery ? 100 : 0;
   const grandTotal = subtotal - discount + tax + deliveryFee;
+  const applySourceDefaults = (sourceId: OrderSource) => {
+    const source = branchSources.find((item) => item.sourceId === sourceId);
+    if (!source) return;
+    setOrderSource(source.sourceId);
+    setPaymentMethod(source.defaultPaymentMethod === "Not Specified" ? "Cash" : source.defaultPaymentMethod);
+    setOrderStatus(source.defaultOrderStatus);
+    setRequiresDelivery(source.requiresDelivery);
+  };
+  const changeBranch = (branch: string) => {
+    const nextSources = operationalOrderSources.filter((source) => sourceAvailableForBranch(source, branch));
+    const nextSource = nextSources.find((source) => source.sourceId === orderSource) ?? nextSources[0];
+    setSelectedBranch(branch);
+    if (nextSource) {
+      setOrderSource(nextSource.sourceId);
+      setPaymentMethod(nextSource.defaultPaymentMethod === "Not Specified" ? "Cash" : nextSource.defaultPaymentMethod);
+      setOrderStatus(nextSource.defaultOrderStatus);
+      setRequiresDelivery(nextSource.requiresDelivery);
+    }
+  };
+  const fulfillmentFromSource = orderStatus === "Confirmed" ? "Confirmed" : "Pending";
   const save = () => {
     if (!selectedCustomer || rows.length === 0 || rows.some((row) => row.quantity <= 0)) {
       setError("Patient and at least one valid item are required.");
@@ -207,17 +234,17 @@ function CreateOrderModal({ onClose, onCreate, customerId }: { onClose: () => vo
       orderSource,
       marketplaceSource: null,
       paymentStatus: "Pending",
-      paymentMethod: "Card",
-      fulfillmentStatus: "Pending",
-      deliveryStatus: "Not Scheduled",
-      deliveryMethod: "Home Delivery",
-      warehouse: customer.defaultWarehouse,
+      paymentMethod,
+      fulfillmentStatus: fulfillmentFromSource,
+      deliveryStatus: requiresDelivery ? "Preparing" : "Not Scheduled",
+      deliveryMethod: requiresDelivery ? "Home Delivery" : "Clinic Pickup",
+      warehouse: selectedBranch,
       salesRep: customer.salesRep,
       deliveryFee,
       paidAmount: 0,
       items: rows.map((row, index) => {
         const product = salesProducts.find((item) => item.name === row.product) ?? salesProducts[0];
-        return { product: product.name, sku: product.sku, batch: `B-NEW-${index + 1}`, expiry: product.expiry, warehouse: customer.defaultWarehouse, availableStock: product.stock, quantity: row.quantity, unitPrice: product.price, discount: row.discount, tax: Math.round(row.quantity * product.price * 0.14) };
+        return { product: product.name, sku: product.sku, batch: `B-NEW-${index + 1}`, expiry: product.expiry, warehouse: selectedBranch, availableStock: product.stock, quantity: row.quantity, unitPrice: product.price, discount: row.discount, tax: Math.round(row.quantity * product.price * 0.14) };
       }),
     };
     onCreate(order);
@@ -269,18 +296,23 @@ function CreateOrderModal({ onClose, onCreate, customerId }: { onClose: () => vo
           </div>
         </Card>
         <Card className="p-4">
-          <h3 className="font-semibold text-slate-950">Payment and Delivery</h3>
+          <h3 className="font-semibold text-slate-950">Source, Payment, and Delivery</h3>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <Field label="Payment Method"><Select defaultValue="Card">{paymentMethods.map((item) => <option key={item}>{item}</option>)}</Select></Field>
-            <Field label="Order Source"><Select value={orderSource} onChange={(event) => setOrderSource(event.target.value as OrderSource)}>{Object.entries(orderSourceConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</Select></Field>
+            <Field label="Branch"><Select value={selectedBranch} onChange={(event) => changeBranch(event.target.value)}>{orderSourceBranches.filter((branch) => branch !== "All Branches").map((item) => <option key={item}>{item}</option>)}</Select></Field>
+            <Field label="Order Source"><Select value={orderSource} onChange={(event) => applySourceDefaults(event.target.value as OrderSource)}>{branchSources.map((source) => <option key={source.id} value={source.sourceId}>{source.name}</option>)}</Select></Field>
+            <Field label="Default Order Status"><Select value={orderStatus} onChange={(event) => setOrderStatus(event.target.value as typeof orderStatus)}><option>New</option><option>Pending Review</option><option>Confirmed</option></Select></Field>
+            <Field label="Payment Method"><Select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>{paymentMethods.map((item) => <option key={item}>{item}</option>)}</Select></Field>
+            <Field label="Requires Delivery"><Select value={requiresDelivery ? "Yes" : "No"} onChange={(event) => setRequiresDelivery(event.target.value === "Yes")}><option>Yes</option><option>No</option></Select></Field>
             <Field label="Payment Status"><Select defaultValue="Pending"><option>Paid</option><option>Pending</option><option>Refunded</option></Select></Field>
-            <Field label="Delivery Method"><Select defaultValue="Home Delivery">{deliveryMethods.map((item) => <option key={item}>{item}</option>)}</Select></Field>
-            <Field label="Care Center"><Select defaultValue={customer.defaultWarehouse}>{salesWarehouses.map((item) => <option key={item}>{item}</option>)}</Select></Field>
+            <Field label="Delivery Method"><Select value={requiresDelivery ? "Home Delivery" : "Clinic Pickup"} onChange={() => undefined}>{deliveryMethods.map((item) => <option key={item}>{item}</option>)}</Select></Field>
             <Field label="Requested Delivery Date"><Input type="date" defaultValue={format(addDays(new Date("2026-07-21"), 1), "yyyy-MM-dd")} /></Field>
             <Field label="Care Coordinator"><Select defaultValue={customer.salesRep}>{salesRepresentatives.map((item) => <option key={item}>{item}</option>)}</Select></Field>
             <Field label="Patient Notes"><Input placeholder="Patient notes" /></Field>
             <Field label="Internal Notes"><Input placeholder="Internal notes" /></Field>
           </div>
+          <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-800">
+            {selectedSource.name} defaults applied: {selectedSource.defaultOrderStatus}, {selectedSource.defaultPaymentMethod}, delivery {selectedSource.requiresDelivery ? "required" : "not required"}.
+          </p>
           <div className="mt-4 ml-auto max-w-sm space-y-1 text-sm">
             <div className="flex justify-between"><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></div>
             <div className="flex justify-between"><span>Discount</span><strong>{formatCurrency(discount)}</strong></div>
