@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Globe, Headphones, Keyboard, Link2, MessageCircle, MoreHorizontal, Pencil, Plus, Search, Smartphone, Store, Eye, X, AlertTriangle } from "lucide-react";
+import { Globe, Headphones, Keyboard, Link2, MessageCircle, Pencil, Plus, Search, Smartphone, Store, Eye, X, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { MoreActionsMenu } from "@/components/ui/MoreActionsMenu";
 import { cn, formatNumber } from "@/lib/utils";
 import { operationalOrderSources, orderSourceBranches, orderSourceTypes, sourceDefaultOrderStatuses, sourceDefaultPaymentMethods, type OperationalOrderSource, type OperationalSourceStatus, type OperationalSourceType } from "@/data/orderSources";
 
@@ -40,7 +41,7 @@ function Field({ label, children, error, helper }: { label: string; children: JS
 }
 
 function ActionMenu({ source, onToggle, onDelete }: { source: OperationalOrderSource; onToggle: () => void; onDelete: () => void }) {
-  return <details className="relative"><summary className="mx-auto grid h-10 w-10 cursor-pointer list-none place-items-center rounded-lg text-slate-600 transition hover:bg-brand-50 hover:text-brand-800" aria-label="More Actions" title="More Actions"><MoreHorizontal className="h-4 w-4" /></summary><div className="absolute right-0 z-20 mt-2 w-44 rounded-lg border border-slate-200 bg-white p-1.5 text-sm shadow-soft"><button className="w-full rounded-md px-3 py-2 text-left hover:bg-brand-50" onClick={onToggle}>{source.status === "Active" ? "Deactivate" : "Activate"}</button><button className="w-full rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50" onClick={onDelete}>Delete</button></div></details>;
+  return <MoreActionsMenu actions={[{ label: source.status === "Active" ? "Deactivate" : "Activate", onClick: onToggle }, { label: "Delete", onClick: onDelete, danger: true }]} />;
 }
 
 function SourceForm({ source, sources, onCancel, onSave }: { source?: OperationalOrderSource; sources: OperationalOrderSource[]; onCancel: () => void; onSave: (source: OperationalOrderSource) => void }) {

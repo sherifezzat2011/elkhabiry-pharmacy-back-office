@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { AlertTriangle, Eye, MoreHorizontal, PackageCheck, Pencil, Plus, Search, X } from "lucide-react";
+import { AlertTriangle, Eye, PackageCheck, Pencil, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { MoreActionsMenu } from "@/components/ui/MoreActionsMenu";
 import { cn, formatNumber } from "@/lib/utils";
 
 type SupplierStatus = "Active" | "Inactive";
@@ -135,7 +136,7 @@ function Field({ label, children }: { label: string; children: JSX.Element }) {
 }
 
 function ActionMenu({ actions }: { actions: { label: string; onClick: () => void; danger?: boolean }[] }) {
-  return <details className="relative"><summary className="mx-auto grid h-10 w-10 cursor-pointer list-none place-items-center rounded-lg text-slate-600 transition hover:bg-brand-50 hover:text-brand-800" aria-label="More Actions" title="More Actions"><MoreHorizontal className="h-4 w-4" /></summary><div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-slate-200 bg-white p-1.5 text-sm shadow-soft">{actions.map((action) => <button key={action.label} className={cn("w-full rounded-md px-3 py-2 text-left hover:bg-brand-50", action.danger && "text-red-700 hover:bg-red-50")} onClick={action.onClick}>{action.label}</button>)}</div></details>;
+  return <MoreActionsMenu actions={actions} />;
 }
 
 function SupplierForm({ supplier, onCancel, onSave }: { supplier?: Supplier; onCancel: () => void; onSave: (supplier: Supplier) => void }) {

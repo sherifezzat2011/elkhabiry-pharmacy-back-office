@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bike, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Copy, Eye, FileSpreadsheet, Folder, MapPinned, MoreHorizontal, Pause, Pencil, Play, Plus, Search, Tag, Truck, X } from "lucide-react";
+import { AlertTriangle, Bike, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Copy, Eye, FileSpreadsheet, Folder, MapPinned, Pause, Pencil, Play, Plus, Search, Tag, Truck, X } from "lucide-react";
 import { format, startOfWeek, subDays } from "date-fns";
 import { useSearchParams } from "react-router-dom";
 import { BarPanel, CategorySharePanel, DonutPanel, HorizontalBarPanel, InventoryMovementTrendPanel, MainChart, MovementPanel, ParetoPanel } from "@/components/Charts";
@@ -16,6 +16,7 @@ import { OrdersByDayFilters } from "@/components/OrdersByDayFilters";
 import { ProductPerformanceFilters } from "@/components/ProductPerformanceFilters";
 import { ReportSkeleton } from "@/components/Skeleton";
 import { Card } from "@/components/ui/Card";
+import { MoreActionsMenu } from "@/components/ui/MoreActionsMenu";
 import { getAvailableAreasForCity, getFilterOptions, getOverviewReport, getReport, type OrdersByDayMode } from "@/services/mock-api";
 import { useFilterStore } from "@/store/filters";
 import type { TableRow } from "@/types";
@@ -260,10 +261,23 @@ const initialPromotionOffers: Offer[] = [
   },
 ];
 
-const promoCodes = [
-  { code: "FREESHIP", discount: "Free Delivery", used: "145", revenue: "12,400 EGP", status: "Active" },
-  { code: "SAVE20", discount: "20%", used: "92", revenue: "9,850 EGP", status: "Active" },
-  { code: "VITAMIN10", discount: "10%", used: "51", revenue: "4,900 EGP", status: "Active" },
+type PromoCode = {
+  id: string;
+  code: string;
+  discount: string;
+  used: number;
+  revenue: number;
+  status: "Active" | "Inactive" | "Scheduled";
+  channel: string;
+  usageLimit: number;
+  startDate: string;
+  endDate: string;
+};
+
+const initialPromoCodes: PromoCode[] = [
+  { id: "promo-1", code: "FREESHIP", discount: "Free Delivery", used: 145, revenue: 12400, status: "Active", channel: "Mobile App", usageLimit: 1, startDate: "2026-07-01", endDate: "2026-08-01" },
+  { id: "promo-2", code: "SAVE20", discount: "20%", used: 92, revenue: 9850, status: "Active", channel: "Website", usageLimit: 2, startDate: "2026-07-10", endDate: "2026-08-10" },
+  { id: "promo-3", code: "VITAMIN10", discount: "10%", used: 51, revenue: 4900, status: "Active", channel: "WhatsApp", usageLimit: 1, startDate: "2026-07-15", endDate: "2026-08-15" },
 ];
 
 type DeliveryStatus = "Active" | "Inactive";
@@ -661,14 +675,7 @@ function OfferDetailsDrawer({ offer, onClose, onEdit, onStatusChange, onDuplicat
           {offer.status === "Active" ? <Button variant="primary" onClick={() => onStatusChange(offer.id, "Paused")}><Pause className="h-4 w-4" />Pause Offer</Button> : null}
           {offer.status === "Paused" ? <Button variant="primary" onClick={() => onStatusChange(offer.id, "Active")}><Play className="h-4 w-4" />Activate Offer</Button> : null}
           {offer.status === "Scheduled" ? <Button variant="primary" onClick={() => onStatusChange(offer.id, "Active")}><Play className="h-4 w-4" />Activate Now</Button> : null}
-          {offer.status === "Scheduled" ? (
-            <details className="relative">
-              <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-brand-50" aria-label="More actions" title="More actions"><MoreHorizontal className="h-4 w-4" />More</summary>
-              <div className="absolute bottom-12 right-0 z-20 w-44 rounded-lg border border-slate-200 bg-white p-1.5 text-sm shadow-soft">
-                <button className="w-full rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50" onClick={() => onStatusChange(offer.id, "Cancelled")}>Cancel Offer</button>
-              </div>
-            </details>
-          ) : null}
+          {offer.status === "Scheduled" ? <MoreActionsMenu label="More actions" actions={[{ label: "Cancel Offer", onClick: () => onStatusChange(offer.id, "Cancelled"), danger: true }]} /> : null}
         </div>
       </aside>
     </div>
@@ -767,17 +774,7 @@ function OffersDemoPage() {
                   <div className="flex items-center justify-center gap-1.5">
                     <Button size="icon" variant="ghost" aria-label="View offer" title="View offer" onClick={() => setSelectedOfferId(offer.id)}><Eye className="h-4 w-4" /></Button>
                     <Button size="icon" variant="ghost" aria-label="Edit offer" title="Edit offer" onClick={() => { setEditingOffer(offer); setFormOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                    <details className="relative">
-                      <summary className="grid h-10 w-10 cursor-pointer list-none place-items-center rounded-lg border border-transparent text-slate-600 transition hover:bg-brand-50 hover:text-brand-800" aria-label="More actions" title="More actions"><MoreHorizontal className="h-4 w-4" /></summary>
-                      <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-slate-200 bg-white p-1.5 text-sm shadow-soft">
-                        <button className="w-full rounded-md px-3 py-2 text-left hover:bg-brand-50" onClick={() => setSelectedOfferId(offer.id)}>View Details</button>
-                        <button className="w-full rounded-md px-3 py-2 text-left hover:bg-brand-50" onClick={() => { setEditingOffer(offer); setFormOpen(true); }}>Edit Offer</button>
-                        {offer.status === "Active" ? <button className="w-full rounded-md px-3 py-2 text-left hover:bg-brand-50" onClick={() => updateStatus(offer.id, "Paused")}>Pause Offer</button> : null}
-                        {offer.status === "Paused" || offer.status === "Scheduled" ? <button className="w-full rounded-md px-3 py-2 text-left hover:bg-brand-50" onClick={() => updateStatus(offer.id, "Active")}>Activate Offer</button> : null}
-                        <button className="w-full rounded-md px-3 py-2 text-left hover:bg-brand-50" onClick={() => duplicateOffer(offer)}>Duplicate Offer</button>
-                        {offer.status === "Scheduled" || offer.status === "Active" || offer.status === "Paused" ? <button className="w-full rounded-md px-3 py-2 text-left text-red-700 hover:bg-red-50" onClick={() => updateStatus(offer.id, "Cancelled")}>Cancel Offer</button> : null}
-                      </div>
-                    </details>
+                    <MoreActionsMenu actions={[{ label: "View Details", onClick: () => setSelectedOfferId(offer.id) }, { label: "Edit Offer", onClick: () => { setEditingOffer(offer); setFormOpen(true); } }, ...(offer.status === "Active" ? [{ label: "Pause Offer", onClick: () => updateStatus(offer.id, "Paused") }] : []), ...(offer.status === "Paused" || offer.status === "Scheduled" ? [{ label: "Activate Offer", onClick: () => updateStatus(offer.id, "Active") }] : []), { label: "Duplicate Offer", onClick: () => duplicateOffer(offer) }, ...(offer.status === "Scheduled" || offer.status === "Active" || offer.status === "Paused" ? [{ label: "Cancel Offer", onClick: () => updateStatus(offer.id, "Cancelled"), danger: true }] : [])]} />
                   </div>
                 </td>
               </tr>
@@ -791,20 +788,52 @@ function OffersDemoPage() {
   );
 }
 
+function PromoCodeFormDrawer({ onClose, onSave }: { onClose: () => void; onSave: (promoCode: PromoCode) => void }) {
+  const [form, setForm] = useState({ code: "", discountType: "Percentage", discountValue: "10", channel: "Mobile App", usageLimit: "1", status: "Active" as PromoCode["status"], startDate: "2026-07-27", endDate: "2026-08-27" });
+  const [error, setError] = useState("");
+  const submit = () => {
+    const code = form.code.trim().toUpperCase();
+    const value = Number(form.discountValue);
+    if (!code) return setError("Promo code is required.");
+    if (form.discountType !== "Free Delivery" && (!Number.isFinite(value) || value <= 0)) return setError("Discount value must be greater than zero.");
+    if (new Date(form.endDate) <= new Date(form.startDate)) return setError("End date must be after start date.");
+    onSave({
+      id: `promo-${Date.now()}`,
+      code,
+      discount: form.discountType === "Free Delivery" ? "Free Delivery" : form.discountType === "Percentage" ? `${value}%` : `${value} EGP`,
+      used: 0,
+      revenue: 0,
+      status: form.status,
+      channel: form.channel,
+      usageLimit: Number(form.usageLimit) || 1,
+      startDate: form.startDate,
+      endDate: form.endDate,
+    });
+  };
+  return <div className="fixed inset-0 z-50"><button className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm" aria-label="Close promo code form" onClick={onClose} /><aside className="absolute right-0 top-0 flex h-full w-full flex-col bg-white shadow-2xl sm:max-w-xl"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-wide text-brand-700">Promotions</p><h2 className="mt-1 text-lg font-bold text-slate-950">Add Promo Code</h2></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="Close form"><X className="h-5 w-5" /></Button></div><div className="min-h-0 flex-1 overflow-y-auto p-5"><div className="space-y-4">{error ? <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}<label className="grid gap-1.5 text-sm font-semibold text-slate-700">Promo Code<input className="h-10 rounded-lg border border-slate-200 px-3 uppercase outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} placeholder="SAVE20" /></label><div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Discount Type<select className="h-10 rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" value={form.discountType} onChange={(event) => setForm({ ...form, discountType: event.target.value })}><option>Percentage</option><option>Fixed Amount</option><option>Free Delivery</option></select></label><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Discount Value<input className="h-10 rounded-lg border border-slate-200 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" type="number" disabled={form.discountType === "Free Delivery"} value={form.discountType === "Free Delivery" ? 0 : form.discountValue} onChange={(event) => setForm({ ...form, discountValue: event.target.value })} /></label></div><div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Channel<select className="h-10 rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" value={form.channel} onChange={(event) => setForm({ ...form, channel: event.target.value })}>{offerChannels.map((channel) => <option key={channel}>{channel}</option>)}</select></label><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Usage Limit Per Customer<input className="h-10 rounded-lg border border-slate-200 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" type="number" min={1} value={form.usageLimit} onChange={(event) => setForm({ ...form, usageLimit: event.target.value })} /></label></div><div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Start Date<input className="h-10 rounded-lg border border-slate-200 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" type="date" value={form.startDate} onChange={(event) => setForm({ ...form, startDate: event.target.value })} /></label><label className="grid gap-1.5 text-sm font-semibold text-slate-700">End Date<input className="h-10 rounded-lg border border-slate-200 px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" type="date" value={form.endDate} onChange={(event) => setForm({ ...form, endDate: event.target.value })} /></label></div><label className="grid gap-1.5 text-sm font-semibold text-slate-700">Status<select className="h-10 rounded-lg border border-slate-200 bg-white px-3 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as PromoCode["status"] })}><option>Active</option><option>Scheduled</option><option>Inactive</option></select></label></div></div><div className="flex justify-end gap-2 border-t border-slate-100 p-4"><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={submit}>Save Promo Code</Button></div></aside></div>;
+}
+
 function PromoCodesDemoPage() {
+  const [codes, setCodes] = useState(initialPromoCodes);
+  const [formOpen, setFormOpen] = useState(false);
+  const activeCodes = codes.filter((code) => code.status === "Active").length;
+  const redemptions = codes.reduce((sum, code) => sum + code.used, 0);
+  const revenueImpact = codes.reduce((sum, code) => sum + code.revenue, 0);
+  const averageDiscount = codes.length ? codes.reduce((sum, code) => sum + (code.discount.includes("%") ? Number(code.discount.replace("%", "")) : code.discount === "Free Delivery" ? 12 : 8), 0) / codes.length : 0;
   return (
     <div className="mx-auto max-w-[1680px] space-y-5">
-      <ExecutiveHero eyebrow="Promotions" title="Promo Codes" subtitle="Clean view of pharmacy promo-code usage, revenue impact, and average customer incentive across digital channels." />
+      <ExecutiveHero eyebrow="Promotions" title="Promo Codes" subtitle="Clean view of pharmacy promo-code usage, revenue impact, and average customer incentive across digital channels." action={<Button variant="primary" onClick={() => setFormOpen(true)}><Plus className="h-4 w-4" />Add Promo Code</Button>} />
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <DemoKpi label="Active Promo Codes" value="3" detail="Live customer incentives" />
-        <DemoKpi label="Redemptions" value="288" detail="Successful code usage" />
-        <DemoKpi label="Revenue Impact" value="27,150 EGP" detail="Attributed order revenue" />
-        <DemoKpi label="Average Discount" value="14.8%" detail="Across active codes" />
+        <DemoKpi label="Active Promo Codes" value={String(activeCodes)} detail="Live customer incentives" />
+        <DemoKpi label="Redemptions" value={formatNumber(redemptions)} detail="Successful code usage" />
+        <DemoKpi label="Revenue Impact" value={formatOfferCurrency(revenueImpact)} detail="Attributed order revenue" />
+        <DemoKpi label="Average Discount" value={`${averageDiscount.toFixed(1)}%`} detail="Across configured codes" />
       </section>
       <SimpleExecutiveTable
-        headers={["Code", "Discount", "Used", "Revenue", "Status"]}
-        rows={promoCodes.map((code) => [code.code, code.discount, code.used, code.revenue, <DemoBadge value={code.status} />])}
+        headers={["Code", "Discount", "Used", "Revenue", "Channel", "Status"]}
+        rows={codes.map((code) => [code.code, code.discount, formatNumber(code.used), formatOfferCurrency(code.revenue), code.channel, <DemoBadge value={code.status} />])}
       />
+      {formOpen ? <PromoCodeFormDrawer onClose={() => setFormOpen(false)} onSave={(promoCode) => { setCodes((previous) => [promoCode, ...previous]); setFormOpen(false); }} /> : null}
     </div>
   );
 }
@@ -963,18 +992,7 @@ function CatalogStatusBadge({ value }: { value: string }) {
 }
 
 function CatalogActionMenu({ actions }: { actions: { label: string; onClick: () => void; danger?: boolean }[] }) {
-  return (
-    <details className="relative">
-      <summary className="mx-auto grid h-9 w-9 cursor-pointer list-none place-items-center rounded-lg border border-transparent text-slate-600 transition hover:bg-brand-50 hover:text-brand-800" aria-label="More Actions" title="More Actions">
-        <MoreHorizontal className="h-4 w-4" />
-      </summary>
-      <div className="absolute right-0 z-20 mt-2 w-44 rounded-lg border border-slate-200 bg-white p-1.5 text-sm shadow-soft">
-        {actions.map((action) => (
-          <button key={action.label} className={cn("w-full rounded-md px-3 py-2 text-left hover:bg-brand-50", action.danger && "text-red-700 hover:bg-red-50")} onClick={action.onClick}>{action.label}</button>
-        ))}
-      </div>
-    </details>
-  );
+  return <MoreActionsMenu actions={actions} />;
 }
 
 function CategoryForm({ category, parents, parentId, onCancel, onSave }: { category?: CatalogCategory; parents: CatalogCategory[]; parentId?: string | null; onCancel: () => void; onSave: (category: CatalogCategory) => void }) {
