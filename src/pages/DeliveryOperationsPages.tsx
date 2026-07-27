@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { Eye, Pencil, Plus, Search, X } from "lucide-react";
 import { DonutPanel } from "@/components/Charts";
 import { Card } from "@/components/ui/Card";
@@ -84,6 +84,7 @@ function Field({ label, children }: { label: string; children: JSX.Element }) {
 const inputClass = "h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
 const tileSize = 256;
 const defaultMapCenter = { lat: 30.7865, lng: 31.0004 };
+type MapSearchResult = { place_id: number; display_name: string; lat: string; lon: string };
 
 function lngToWorldX(lng: number, zoom: number) {
   return ((lng + 180) / 360) * 2 ** zoom * tileSize;
@@ -187,6 +188,99 @@ function MapPointSelector({ points, onChange }: { points: { lat: number; lng: nu
 }
 
 function RealMapSurface({ points, onAddPoint, readonly = false, heightClass = "h-80" }: { points: { lat: number; lng: number }[]; onAddPoint?: (point: { lat: number; lng: number }) => void; readonly?: boolean; heightClass?: string }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ x: number; y: number; lat: number; lng: number; moved: boolean } | null>(null);
+  const [zoom, setZoom] = useState(points[0] ? 13 : 12);
+  const [center, setCenter] = useState(points[0] ?? defaultMapCenter);
+  const [size, setSize] = useState({ width: 640, height: 320 });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<MapSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState("");
+
+  useEffect(() => {
+    const element = mapRef.current;
+    if (!element) return;
+    const updateSize = () => setSize({ width: element.clientWidth || 640, height: element.clientHeight || 320 });
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const centerPixel = projectMapPoint(center, zoom);
+  const topLeft = { x: centerPixel.x - size.width / 2, y: centerPixel.y - size.height / 2 };
+  const scale = 2 ** zoom;
+  const minTileX = Math.floor(topLeft.x / tileSize);
+  const maxTileX = Math.floor((topLeft.x + size.width) / tileSize);
+  const minTileY = Math.floor(topLeft.y / tileSize);
+  const maxTileY = Math.floor((topLeft.y + size.height) / tileSize);
+  const tiles: { x: number; y: number; wrappedX: number; left: number; top: number }[] = [];
+  for (let x = minTileX; x <= maxTileX; x += 1) {
+    for (let y = minTileY; y <= maxTileY; y += 1) {
+      if (y < 0 || y >= scale) continue;
+      tiles.push({ x, y, wrappedX: ((x % scale) + scale) % scale, left: x * tileSize - topLeft.x, top: y * tileSize - topLeft.y });
+    }
+  }
+  const screenPoints = points.map((point) => {
+    const projected = projectMapPoint(point, zoom);
+    return { ...point, x: projected.x - topLeft.x, y: projected.y - topLeft.y };
+  });
+
+  const zoomBy = (delta: number) => setZoom((value) => Math.max(2, Math.min(18, value + delta)));
+  const addPoint = (event: MouseEvent<HTMLDivElement>) => {
+    if (readonly || !onAddPoint || dragRef.current?.moved) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const worldX = topLeft.x + event.clientX - rect.left;
+    const worldY = topLeft.y + event.clientY - rect.top;
+    onAddPoint({ lat: worldYToLat(worldY, zoom), lng: worldXToLng(worldX, zoom) });
+  };
+  const startDrag = (event: MouseEvent<HTMLDivElement>) => {
+    if (readonly) return;
+    dragRef.current = { x: event.clientX, y: event.clientY, lat: center.lat, lng: center.lng, moved: false };
+  };
+  const drag = (event: MouseEvent<HTMLDivElement>) => {
+    const start = dragRef.current;
+    if (!start) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < 3) return;
+    start.moved = true;
+    const startPixel = projectMapPoint({ lat: start.lat, lng: start.lng }, zoom);
+    setCenter({ lat: worldYToLat(startPixel.y - (event.clientY - start.y), zoom), lng: worldXToLng(startPixel.x - (event.clientX - start.x), zoom) });
+  };
+  const searchPlace = async (event: FormEvent) => {
+    event.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) return;
+    setSearching(true);
+    setSearchError("");
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&countrycodes=eg&q=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error("Search failed");
+      const results = (await response.json()) as MapSearchResult[];
+      setSearchResults(results);
+      if (!results.length) setSearchError("No places found.");
+    } catch {
+      setSearchResults([]);
+      setSearchError("Map search is unavailable right now.");
+    } finally {
+      setSearching(false);
+    }
+  };
+  const selectSearchResult = (result: MapSearchResult) => {
+    const lat = Number(result.lat);
+    const lng = Number(result.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    setCenter({ lat, lng });
+    setZoom(15);
+    setSearchQuery(result.display_name.split(",").slice(0, 2).join(", "));
+    setSearchResults([]);
+    setSearchError("");
+  };
+
+  return <div ref={mapRef} className={cn("relative mt-3 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-200 shadow-inner", heightClass)} onClick={addPoint} onMouseDown={startDrag} onMouseMove={drag} onMouseLeave={() => { dragRef.current = null; }} onMouseUp={() => { window.setTimeout(() => { dragRef.current = null; }, 0); }}>{tiles.map((tile) => <img key={`${tile.x}-${tile.y}-${zoom}`} className="absolute select-none" alt="" draggable={false} src={`https://tile.openstreetmap.org/${zoom}/${tile.wrappedX}/${tile.y}.png`} style={{ left: tile.left, top: tile.top, width: tileSize, height: tileSize }} />)}<svg className="pointer-events-none absolute inset-0 z-10 h-full w-full">{screenPoints.length >= 3 ? <polygon points={screenPoints.map((point) => `${point.x},${point.y}`).join(" ")} className="fill-brand-100/60 stroke-brand-500" strokeWidth="3" /> : null}</svg>{screenPoints.map((point, index) => <span key={`${point.lat}-${point.lng}-${index}`} className="pointer-events-none absolute z-20 grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white shadow-soft ring-2 ring-white" style={{ left: point.x, top: point.y }}>{index + 1}</span>)}{!readonly ? <form className="absolute left-3 top-3 z-30 w-[min(340px,calc(100%-6rem))]" onSubmit={searchPlace} onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}><div className="flex h-10 items-center gap-2 rounded-md bg-white px-3 text-sm text-slate-500 shadow-sm"><Search className="h-4 w-4 shrink-0" /><input className="min-w-0 flex-1 bg-transparent text-slate-900 outline-none placeholder:text-slate-500" placeholder="Search map" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /><button type="submit" className="rounded px-2 py-1 text-xs font-bold text-brand-700 hover:bg-brand-50" disabled={searching}>{searching ? "..." : "Go"}</button></div>{searchResults.length || searchError ? <div className="mt-2 max-h-44 overflow-y-auto rounded-md bg-white py-1 text-xs shadow-soft ring-1 ring-slate-200">{searchResults.map((result) => <button key={result.place_id} type="button" className="block w-full px-3 py-2 text-left leading-5 text-slate-700 hover:bg-brand-50 hover:text-brand-900" onClick={() => selectSearchResult(result)}>{result.display_name}</button>)}{searchError ? <p className="px-3 py-2 font-semibold text-slate-500">{searchError}</p> : null}</div> : null}</form> : null}<div className="absolute right-3 top-3 z-20 overflow-hidden rounded-md bg-white text-slate-700 shadow-sm" onMouseDown={(event) => event.stopPropagation()}><button type="button" className="grid h-9 w-9 place-items-center border-b border-slate-200 text-2xl font-bold" onClick={(event) => { event.stopPropagation(); zoomBy(1); }}>+</button><button type="button" className="grid h-9 w-9 place-items-center border-b border-slate-200 text-2xl font-bold" onClick={(event) => { event.stopPropagation(); zoomBy(-1); }}>-</button><span className="grid h-9 w-9 place-items-center text-xs font-bold">{zoom}</span></div><button type="button" className="absolute right-3 top-[122px] z-20 grid h-9 w-9 place-items-center rounded-md bg-white text-xs font-bold text-slate-700 shadow-sm" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); setCenter(defaultMapCenter); setZoom(12); }}>Fit</button><span className="absolute bottom-3 left-3 z-20 rounded-md bg-white/95 px-2.5 py-1 text-xs font-bold text-slate-700 shadow-sm">{points.length ? `${points.length} point${points.length === 1 ? "" : "s"} selected` : readonly ? "No custom boundary points" : "Click on the map to add points"}</span><span className="absolute bottom-3 right-3 z-20 rounded bg-white/85 px-2 py-1 text-[10px] font-semibold text-brand-700">(c) OpenStreetMap contributors</span></div>;
+}
+
+export function RealMapSurfaceLegacy({ points, onAddPoint, readonly = false, heightClass = "h-80" }: { points: { lat: number; lng: number }[]; onAddPoint?: (point: { lat: number; lng: number }) => void; readonly?: boolean; heightClass?: string }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; lat: number; lng: number } | null>(null);
   const [zoom, setZoom] = useState(points[0] ? 13 : 12);
