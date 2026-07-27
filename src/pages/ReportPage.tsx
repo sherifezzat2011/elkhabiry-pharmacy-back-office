@@ -318,6 +318,8 @@ type DeliveryZone = {
   createdDate: string;
   lastUpdated: string;
   coverageDetails: string;
+  radiusKm?: number;
+  mapPoints?: { lat: number; lng: number }[];
 };
 
 type DeliveryOrder = {
@@ -357,6 +359,31 @@ const deliveryAreas = initialDeliveryZones.map((zone) => ({
   fee: `${zone.deliveryFee} EGP`,
   revenue: `${formatNumber(zone.ordersToday * zone.deliveryFee)} EGP`,
 }));
+
+const deliveryZonesStorageKey = "elkhabiry.deliveryZones";
+
+function usePersistentDeliveryZones() {
+  const [zones, setZonesState] = useState<DeliveryZone[]>(() => {
+    if (typeof window === "undefined") return initialDeliveryZones;
+    try {
+      const saved = window.localStorage.getItem(deliveryZonesStorageKey);
+      return saved ? JSON.parse(saved) as DeliveryZone[] : initialDeliveryZones;
+    } catch {
+      return initialDeliveryZones;
+    }
+  });
+
+  const setZones = useCallback((nextZones: DeliveryZone[]) => {
+    setZonesState(nextZones);
+    try {
+      window.localStorage.setItem(deliveryZonesStorageKey, JSON.stringify(nextZones));
+    } catch {
+      // Keep the UI state updated even if local storage is unavailable.
+    }
+  }, []);
+
+  return [zones, setZones] as const;
+}
 
 const dailyDeliveries = [
   { day: "Mon", value: 182 },
@@ -858,7 +885,8 @@ function MiniBarChart({ data }: { data: { day: string; value: number }[] }) {
 }
 
 function LocalDeliveryDemoPage() {
-  return <LocalDeliveryOperationsPage initialZones={initialDeliveryZones} initialChannels={initialDeliveryChannels} initialOrders={initialDeliveryOrders} dailyDeliveries={dailyDeliveries} />;
+  const [deliveryZones] = usePersistentDeliveryZones();
+  return <LocalDeliveryOperationsPage initialZones={deliveryZones} initialChannels={initialDeliveryChannels} initialOrders={initialDeliveryOrders} dailyDeliveries={dailyDeliveries} />;
   const rows = deliveryAreas.map((row) => [row.area, String(row.orders), row.fee, row.revenue]);
   return (
     <div className="mx-auto max-w-[1680px] space-y-5">
@@ -894,7 +922,8 @@ function LocalDeliveryDemoPage() {
 }
 
 function PricingDemoPage() {
-  return <DeliveryPricingPage initialZones={initialDeliveryZones} />;
+  const [deliveryZones, setDeliveryZones] = usePersistentDeliveryZones();
+  return <DeliveryPricingPage initialZones={deliveryZones} onZonesChange={setDeliveryZones} />;
   const rules = [
     ["0-3 KM", "20 EGP"],
     ["3-5 KM", "30 EGP"],
@@ -928,7 +957,8 @@ function PricingDemoPage() {
 }
 
 function MethodsDemoPage() {
-  return <DeliveryChannelsPage initialChannels={initialDeliveryChannels} initialZones={initialDeliveryZones} />;
+  const [deliveryZones] = usePersistentDeliveryZones();
+  return <DeliveryChannelsPage initialChannels={initialDeliveryChannels} initialZones={deliveryZones} />;
   const channels = [
     { label: "In-House Drivers", value: 65, icon: Truck },
     { label: "Motorbike Fleet", value: 25, icon: Bike },
@@ -955,7 +985,8 @@ function MethodsDemoPage() {
 }
 
 function CoverageDemoPage() {
-  return <DeliveryZonesPage initialZones={initialDeliveryZones} initialChannels={initialDeliveryChannels} />;
+  const [deliveryZones, setDeliveryZones] = usePersistentDeliveryZones();
+  return <DeliveryZonesPage initialZones={deliveryZones} initialChannels={initialDeliveryChannels} onZonesChange={setDeliveryZones} />;
   return (
     <div className="mx-auto max-w-[1680px] space-y-5">
       <ExecutiveHero eyebrow="Delivery Operations" title="Delivery Coverage" subtitle="Simplified coverage overview for pharmacy delivery service areas and customer reach." />
