@@ -1,5 +1,5 @@
-import { useState, type MouseEvent } from "react";
-import { Eye, MapPinned, Pencil, Plus, Search, X } from "lucide-react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { Eye, Pencil, Plus, Search, X } from "lucide-react";
 import { DonutPanel } from "@/components/Charts";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -45,7 +45,7 @@ export type DeliveryZone = {
   lastUpdated: string;
   coverageDetails: string;
   radiusKm?: number;
-  mapPoints?: { x: number; y: number }[];
+  mapPoints?: { lat: number; lng: number }[];
 };
 
 export type DeliveryOrder = {
@@ -82,6 +82,31 @@ function Field({ label, children }: { label: string; children: JSX.Element }) {
 }
 
 const inputClass = "h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
+const tileSize = 256;
+const defaultMapCenter = { lat: 30.7865, lng: 31.0004 };
+
+function lngToWorldX(lng: number, zoom: number) {
+  return ((lng + 180) / 360) * 2 ** zoom * tileSize;
+}
+
+function latToWorldY(lat: number, zoom: number) {
+  const safeLat = Math.max(-85.0511, Math.min(85.0511, lat));
+  const rad = (safeLat * Math.PI) / 180;
+  return ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * 2 ** zoom * tileSize;
+}
+
+function worldXToLng(x: number, zoom: number) {
+  return (x / (2 ** zoom * tileSize)) * 360 - 180;
+}
+
+function worldYToLat(y: number, zoom: number) {
+  const n = Math.PI - (2 * Math.PI * y) / (2 ** zoom * tileSize);
+  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+}
+
+function projectMapPoint(point: { lat: number; lng: number }, zoom: number) {
+  return { x: lngToWorldX(point.lng, zoom), y: latToWorldY(point.lat, zoom) };
+}
 
 function zoneName(zoneId: string, zones: DeliveryZone[]) {
   return zones.find((zone) => zone.id === zoneId)?.name ?? "Unassigned";
@@ -135,14 +160,14 @@ export function DeliveryChannelsPage({ initialChannels, initialZones }: { initia
 
 function CoveragePreview({ zone, channels }: { zone: DeliveryZone; channels: DeliveryChannel[] }) {
   const points = zone.mapPoints ?? [];
-  return <div className="relative h-64 overflow-hidden rounded-lg border border-brand-100 bg-slate-50"><div className="absolute inset-4 rounded-lg border border-slate-200 bg-white" />{points.length >= 3 ? <svg className="absolute inset-4 h-[calc(100%-2rem)] w-[calc(100%-2rem)]" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points={points.map((point) => `${point.x},${point.y}`).join(" ")} className="fill-brand-100/70 stroke-brand-500" strokeWidth="1.5" />{points.map((point, index) => <circle key={`${point.x}-${point.y}-${index}`} cx={point.x} cy={point.y} r="2" className="fill-brand-700" />)}</svg> : <div className={cn("absolute grid place-items-center border-2 border-brand-400 bg-brand-100/70 text-center text-xs font-bold text-brand-900", zone.coverageType === "Radius" ? "left-1/2 top-1/2 h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full" : "left-12 top-10 h-36 w-52 rounded-lg")}>{zone.name}</div>}<div className="absolute left-1/2 top-1/2 grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand-600 text-white shadow-soft"><MapPinned className="h-5 w-5" /></div><div className="absolute bottom-4 left-4 right-4 rounded-lg bg-white/95 p-3 text-xs text-slate-600 shadow-sm"><p className="font-bold text-slate-900">{zone.coverageDetails}</p><p className="mt-1">Assigned channels: {zone.assignedChannels.map((id) => channelName(id, channels)).join(", ")}</p></div></div>;
+  return <div className="relative h-64 overflow-hidden rounded-lg border border-brand-100 bg-slate-50"><RealMapSurface points={points} readonly heightClass="h-64" />{!points.length ? <div className={cn("pointer-events-none absolute grid place-items-center border-2 border-brand-400 bg-brand-100/70 text-center text-xs font-bold text-brand-900", zone.coverageType === "Radius" ? "left-1/2 top-1/2 h-28 w-28 -translate-x-1/2 -translate-y-1/2 rounded-full" : "left-12 top-10 h-32 w-48 rounded-lg")}>{zone.name}</div> : null}<div className="pointer-events-none absolute bottom-4 left-4 right-4 rounded-lg bg-white/95 p-3 text-xs text-slate-600 shadow-sm"><p className="font-bold text-slate-900">{zone.coverageDetails}</p><p className="mt-1">Assigned channels: {zone.assignedChannels.map((id) => channelName(id, channels)).join(", ")}</p></div></div>;
 }
 
 function ZoneForm({ zone, channels, onCancel, onSave }: { zone?: DeliveryZone; channels: DeliveryChannel[]; onCancel: () => void; onSave: (zone: DeliveryZone) => void }) {
   const initialRadius = zone?.radiusKm ?? Number(zone?.coverageDetails.match(/radius\s+(\d+(?:\.\d+)?)/i)?.[1] ?? 3);
   const [form, setForm] = useState<DeliveryZone>(zone ?? { id: `zone-${Date.now()}`, name: "", coverageType: "Radius", branch: "El Khabiry Main Branch", deliveryFee: 25, minimumOrder: 150, estimatedTime: 25, assignedChannels: channels.slice(0, 1).map((channel) => channel.id), status: "Active", ordersToday: 0, customersCovered: 0, activeOrders: 0, createdDate: "2026-07-26", lastUpdated: "2026-07-26", coverageDetails: "Center: El Khabiry Main Branch, radius 3 KM", radiusKm: 3, mapPoints: [] });
   const [radiusKm, setRadiusKm] = useState(initialRadius);
-  const [mapPoints, setMapPoints] = useState<{ x: number; y: number }[]>(zone?.mapPoints ?? []);
+  const [mapPoints, setMapPoints] = useState<{ lat: number; lng: number }[]>(zone?.mapPoints ?? []);
   const [error, setError] = useState("");
   const toggleChannel = (channelId: string) => setForm((previous) => ({ ...previous, assignedChannels: previous.assignedChannels.includes(channelId) ? previous.assignedChannels.filter((id) => id !== channelId) : [...previous.assignedChannels, channelId] }));
   const radiusDetails = `Center: ${form.branch}, radius ${radiusKm || 0} KM`;
@@ -157,14 +182,66 @@ function ZoneForm({ zone, channels, onCancel, onSave }: { zone?: DeliveryZone; c
   return <Drawer title={zone ? "Edit Delivery Zone" : "Add Delivery Zone"} onClose={onCancel} footer={<div className="flex justify-end gap-2"><Button onClick={onCancel}>Cancel</Button><Button variant="primary" onClick={submit}>Save Zone</Button></div>}><div className="space-y-4">{error ? <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div> : null}<Field label="Zone Name"><input className={inputClass} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Tanta Center" /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Coverage Type"><select className={inputClass} value={form.coverageType} onChange={(event) => setForm({ ...form, coverageType: event.target.value as CoverageType })}><option>Radius</option><option>District</option><option>Postal Area</option><option>Custom Boundary</option></select></Field><Field label="Branch"><input className={inputClass} value={form.branch} onChange={(event) => setForm({ ...form, branch: event.target.value })} /></Field><Field label="Delivery Fee"><input className={inputClass} type="number" min={0} value={form.deliveryFee} onChange={(event) => setForm({ ...form, deliveryFee: Number(event.target.value) })} /></Field><Field label="Minimum Order Value"><input className={inputClass} type="number" min={0} value={form.minimumOrder} onChange={(event) => setForm({ ...form, minimumOrder: Number(event.target.value) })} /></Field><Field label="Estimated Delivery Time"><input className={inputClass} type="number" min={1} value={form.estimatedTime} onChange={(event) => setForm({ ...form, estimatedTime: Number(event.target.value) })} /></Field><Field label="Status"><select className={inputClass} value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value as DeliveryStatus })}><option>Active</option><option>Inactive</option></select></Field></div>{form.coverageType === "Radius" ? <Field label="Radius (KM)"><input className={inputClass} type="number" min={0.5} step={0.5} value={radiusKm} onChange={(event) => setRadiusKm(Number(event.target.value))} /></Field> : <Field label={form.coverageType === "District" ? "District / Area Name" : form.coverageType === "Postal Area" ? "Postal Code or Postal Area" : "Boundary Coordinates or Map Polygon"}><textarea className="min-h-24 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100" value={form.coverageDetails} onChange={(event) => setForm({ ...form, coverageDetails: event.target.value })} /></Field>}<MapPointSelector points={mapPoints} onChange={setMapPoints} /><div><p className="text-sm font-semibold text-slate-700">Assigned Delivery Channels</p><div className="mt-2 grid gap-2">{channels.map((channel) => <label key={channel.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm"><input type="checkbox" checked={form.assignedChannels.includes(channel.id)} onChange={() => toggleChannel(channel.id)} />{channel.name}</label>)}</div></div></div></Drawer>;
 }
 
-function MapPointSelector({ points, onChange }: { points: { x: number; y: number }[]; onChange: (points: { x: number; y: number }[]) => void }) {
-  const addPoint = (event: MouseEvent<HTMLButtonElement>) => {
+function MapPointSelector({ points, onChange }: { points: { lat: number; lng: number }[]; onChange: (points: { lat: number; lng: number }[]) => void }) {
+  return <div className="rounded-lg border border-brand-100 bg-brand-50/40 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-800">Optional Map Points</p><p className="mt-1 text-xs text-slate-500">Zoom or drag the real map, then click at least 3 points to draw a custom zone boundary.</p></div>{points.length ? <Button size="sm" onClick={() => onChange([])}>Clear Points</Button> : null}</div><RealMapSurface points={points} onAddPoint={(point) => onChange([...points, point])} /></div>;
+}
+
+function RealMapSurface({ points, onAddPoint, readonly = false, heightClass = "h-80" }: { points: { lat: number; lng: number }[]; onAddPoint?: (point: { lat: number; lng: number }) => void; readonly?: boolean; heightClass?: string }) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ x: number; y: number; lat: number; lng: number } | null>(null);
+  const [zoom, setZoom] = useState(points[0] ? 13 : 12);
+  const [center, setCenter] = useState(points[0] ?? defaultMapCenter);
+  const [size, setSize] = useState({ width: 640, height: 320 });
+
+  useEffect(() => {
+    const element = mapRef.current;
+    if (!element) return;
+    const updateSize = () => setSize({ width: element.clientWidth || 640, height: element.clientHeight || 320 });
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const centerPixel = projectMapPoint(center, zoom);
+  const topLeft = { x: centerPixel.x - size.width / 2, y: centerPixel.y - size.height / 2 };
+  const scale = 2 ** zoom;
+  const minTileX = Math.floor(topLeft.x / tileSize);
+  const maxTileX = Math.floor((topLeft.x + size.width) / tileSize);
+  const minTileY = Math.floor(topLeft.y / tileSize);
+  const maxTileY = Math.floor((topLeft.y + size.height) / tileSize);
+  const tiles: { x: number; y: number; wrappedX: number; left: number; top: number }[] = [];
+  for (let x = minTileX; x <= maxTileX; x += 1) {
+    for (let y = minTileY; y <= maxTileY; y += 1) {
+      if (y < 0 || y >= scale) continue;
+      tiles.push({ x, y, wrappedX: ((x % scale) + scale) % scale, left: x * tileSize - topLeft.x, top: y * tileSize - topLeft.y });
+    }
+  }
+  const screenPoints = points.map((point) => {
+    const projected = projectMapPoint(point, zoom);
+    return { ...point, x: projected.x - topLeft.x, y: projected.y - topLeft.y };
+  });
+
+  const zoomBy = (delta: number) => setZoom((value) => Math.max(2, Math.min(18, value + delta)));
+  const addPoint = (event: MouseEvent<HTMLDivElement>) => {
+    if (readonly || !onAddPoint || dragRef.current) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const x = Math.round(((event.clientX - rect.left) / rect.width) * 100);
-    const y = Math.round(((event.clientY - rect.top) / rect.height) * 100);
-    onChange([...points, { x: Math.min(100, Math.max(0, x)), y: Math.min(100, Math.max(0, y)) }]);
+    const worldX = topLeft.x + event.clientX - rect.left;
+    const worldY = topLeft.y + event.clientY - rect.top;
+    onAddPoint({ lat: worldYToLat(worldY, zoom), lng: worldXToLng(worldX, zoom) });
   };
-  return <div className="rounded-lg border border-brand-100 bg-brand-50/40 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-bold text-slate-800">Optional Map Points</p><p className="mt-1 text-xs text-slate-500">Click at least 3 points to draw a custom zone boundary.</p></div>{points.length ? <Button size="sm" onClick={() => onChange([])}>Clear Points</Button> : null}</div><button type="button" className="relative mt-3 h-72 w-full overflow-hidden rounded-lg border border-slate-200 bg-[#2f5574] text-left shadow-inner" onClick={addPoint}><div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(126,210,236,0.95)_0_22%,rgba(80,178,218,0.8)_23%_33%,rgba(47,85,116,0)_34%),radial-gradient(circle_at_48%_40%,rgba(255,255,255,0.45)_0_1px,transparent_2px)]" /><div className="absolute left-[37%] top-[6%] h-[76%] w-[40%] rotate-[-13deg] rounded-[48%_52%_44%_56%] bg-[#cfeec9] shadow-[0_0_22px_rgba(255,255,255,0.55)]" /><div className="absolute left-[43%] top-[13%] h-[24%] w-[24%] rotate-[12deg] rounded-[55%_45%_42%_58%] bg-[#e3f4d9]" /><div className="absolute left-[51%] top-[48%] h-[28%] w-[18%] rotate-[28deg] rounded-[45%_55%_62%_38%] bg-[#d9efc8]" /><div className="absolute left-[68%] top-[18%] h-[8%] w-[10%] rounded-full bg-[#c2e7b7]" /><div className="absolute left-[61%] top-[67%] h-[20%] w-[16%] rotate-[20deg] rounded-[60%_40%_54%_46%] bg-[#cdeabf]" /><div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.12)_0_1px,transparent_1.5px)] bg-[size:22px_22px]" /><div className="absolute left-[53%] top-[32%] text-[10px] font-bold text-slate-700/75">Canada</div><div className="absolute left-[52%] top-[56%] text-[10px] font-bold text-slate-800/80">United States</div><div className="absolute left-[51%] top-[77%] text-[10px] font-bold text-slate-700/75">Mexico</div><div className="absolute left-[68%] top-[71%] text-[10px] font-bold text-slate-700/75">Cuba</div><div className="absolute left-[20%] top-[36%] text-center text-[11px] font-semibold italic tracking-[0.2em] text-cyan-100/70">North<br />Pacific<br />Ocean</div><div className="absolute right-[14%] top-[29%] text-center text-[11px] font-semibold italic tracking-[0.2em] text-cyan-100/70">North<br />Atlantic<br />Ocean</div><div className="absolute left-3 top-3 z-20 flex h-10 w-[min(270px,calc(100%-6rem))] items-center gap-2 rounded-md bg-white px-3 text-sm text-slate-500 shadow-sm"><Search className="h-4 w-4 shrink-0" /><span>Search</span></div><div className="absolute right-3 top-3 z-20 overflow-hidden rounded-md bg-white text-slate-700 shadow-sm"><span className="grid h-9 w-9 place-items-center border-b border-slate-200 text-2xl font-bold">+</span><span className="grid h-9 w-9 place-items-center border-b border-slate-200 text-2xl font-bold">-</span><span className="grid h-9 w-9 place-items-center text-xs font-bold">▲</span></div><div className="absolute right-3 top-[122px] z-20 grid h-9 w-9 place-items-center rounded-md bg-white text-lg font-bold text-slate-700 shadow-sm">⛶</div>{points.length >= 3 ? <svg className="absolute inset-0 z-10 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points={points.map((point) => `${point.x},${point.y}`).join(" ")} className="fill-brand-100/60 stroke-brand-400" strokeWidth="1.4" /></svg> : null}{points.map((point, index) => <span key={`${point.x}-${point.y}-${index}`} className="absolute z-20 grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white shadow-soft ring-2 ring-white" style={{ left: `${point.x}%`, top: `${point.y}%` }}>{index + 1}</span>)}<span className="absolute bottom-3 left-3 z-20 rounded-md bg-white/95 px-2.5 py-1 text-xs font-bold text-slate-700 shadow-sm">{points.length ? `${points.length} point${points.length === 1 ? "" : "s"} selected` : "Click on the map to add points"}</span><span className="absolute bottom-3 right-3 z-20 rounded bg-white/80 px-2 py-1 text-[10px] font-semibold text-brand-700">© Mapbox © OpenStreetMap</span></button></div>;
+  const startDrag = (event: MouseEvent<HTMLDivElement>) => {
+    if (readonly) return;
+    dragRef.current = { x: event.clientX, y: event.clientY, lat: center.lat, lng: center.lng };
+  };
+  const drag = (event: MouseEvent<HTMLDivElement>) => {
+    const start = dragRef.current;
+    if (!start) return;
+    const startPixel = projectMapPoint({ lat: start.lat, lng: start.lng }, zoom);
+    setCenter({ lat: worldYToLat(startPixel.y - (event.clientY - start.y), zoom), lng: worldXToLng(startPixel.x - (event.clientX - start.x), zoom) });
+  };
+
+  return <div ref={mapRef} className={cn("relative mt-3 w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-200 shadow-inner", heightClass)} onClick={addPoint} onMouseDown={startDrag} onMouseMove={drag} onMouseLeave={() => { dragRef.current = null; }} onMouseUp={() => { window.setTimeout(() => { dragRef.current = null; }, 0); }}>{tiles.map((tile) => <img key={`${tile.x}-${tile.y}-${zoom}`} className="absolute select-none" alt="" draggable={false} src={`https://tile.openstreetmap.org/${zoom}/${tile.wrappedX}/${tile.y}.png`} style={{ left: tile.left, top: tile.top, width: tileSize, height: tileSize }} />)}<svg className="pointer-events-none absolute inset-0 z-10 h-full w-full">{screenPoints.length >= 3 ? <polygon points={screenPoints.map((point) => `${point.x},${point.y}`).join(" ")} className="fill-brand-100/60 stroke-brand-500" strokeWidth="3" /> : null}</svg>{screenPoints.map((point, index) => <span key={`${point.lat}-${point.lng}-${index}`} className="pointer-events-none absolute z-20 grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white shadow-soft ring-2 ring-white" style={{ left: point.x, top: point.y }}>{index + 1}</span>)}<div className="absolute left-3 top-3 z-20 flex h-10 w-[min(270px,calc(100%-6rem))] items-center gap-2 rounded-md bg-white px-3 text-sm text-slate-500 shadow-sm"><Search className="h-4 w-4 shrink-0" /><span>Search map</span></div><div className="absolute right-3 top-3 z-20 overflow-hidden rounded-md bg-white text-slate-700 shadow-sm"><button type="button" className="grid h-9 w-9 place-items-center border-b border-slate-200 text-2xl font-bold" onClick={(event) => { event.stopPropagation(); zoomBy(1); }}>+</button><button type="button" className="grid h-9 w-9 place-items-center border-b border-slate-200 text-2xl font-bold" onClick={(event) => { event.stopPropagation(); zoomBy(-1); }}>-</button><span className="grid h-9 w-9 place-items-center text-xs font-bold">{zoom}</span></div><button type="button" className="absolute right-3 top-[122px] z-20 grid h-9 w-9 place-items-center rounded-md bg-white text-lg font-bold text-slate-700 shadow-sm" onClick={(event) => { event.stopPropagation(); setCenter(defaultMapCenter); setZoom(12); }}>⛶</button><span className="absolute bottom-3 left-3 z-20 rounded-md bg-white/95 px-2.5 py-1 text-xs font-bold text-slate-700 shadow-sm">{points.length ? `${points.length} point${points.length === 1 ? "" : "s"} selected` : readonly ? "No custom boundary points" : "Click on the map to add points"}</span><span className="absolute bottom-3 right-3 z-20 rounded bg-white/85 px-2 py-1 text-[10px] font-semibold text-brand-700">© OpenStreetMap contributors</span></div>;
 }
 
 function ZoneDetails({ zone, channels, onClose }: { zone: DeliveryZone; channels: DeliveryChannel[]; onClose: () => void }) {
